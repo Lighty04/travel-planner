@@ -65,6 +65,14 @@ A web-based travel manager that automates the full preparation cycle of trip pla
   - Include pricing
 - Track which tickets are purchased vs pending
 
+### 3.6 Collaboration
+- Trip owner invites companions via email
+- Companions can view all trip details
+- Companions can suggest modifications (marked as "pending")
+- Owner approves/rejects suggestions
+- Real-time sync when owner accepts changes
+- Activity log: who did what, when
+
 ---
 
 ## 4. Data Persistence
@@ -114,14 +122,22 @@ A web-based travel manager that automates the full preparation cycle of trip pla
 
 ---
 
-## 7. Open Questions
+## 7. Decisions (Resolved)
 
-1. **Authentication:** Local accounts, OAuth (Google), or both?
-2. **Payment:** Does the system handle payments or redirect to providers?
-3. **Multi-city trips:** Support complex itineraries (Paris → Lyon → Nice)?
-4. **Offline mode:** View saved trips without internet?
-5. **Collaboration:** Share trip planning with travel companions?
-6. **Notifications:** Email alerts for price changes or booking deadlines?
+| Question | Decision |
+|----------|----------|
+| Authentication | Google OAuth only |
+| Payment | Redirect to provider booking pages (no in-app payment) |
+| Multi-city trips | Out of scope for v1 (single destination) |
+| Offline mode | Out of scope for v1 |
+| Collaboration | Yes — share trip with companions |
+| Notifications | Out of scope for v1 (email alerts "later") |
+
+### 7.1 Collaboration Details
+- Trip owner can invite companions via email
+- Companions can view and suggest modifications
+- Owner approves/rejects changes
+- Activity log tracks who suggested what
 
 ---
 
