@@ -16,17 +16,9 @@
                                 │
                                 ▼
                        ┌──────────────────┐
-                       │  External APIs   │
-                       │  - Google OAuth  │
-                       │  - Booking APIs  │
-                       │  - Train APIs    │
-                       │  - Flight APIs   │
-                       └──────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
                        │  Web Scraping    │
-                       │  (fallback)      │
+                       │  - Playwright    │
+                       │  - Google OAuth  │
                        └──────────────────┘
 ```
 
@@ -42,8 +34,8 @@
 | Database | PostgreSQL + Prisma | Relational data, type-safe ORM |
 | Auth | NextAuth.js | Google OAuth, session management |
 | Real-time | Server-Sent Events (SSE) | Trip updates for collaborators |
-| Web Scraping | Puppeteer + Cheerio | Fallback when APIs unavailable |
-| Hosting | Vercel (frontend) + Railway (DB) | Free tier, easy deployment |
+| Web Scraping | Playwright + Cheerio | Primary data source (no APIs) |
+| Hosting | Self-hosted on 192.168.0.16 | PM2 + Nginx + local PostgreSQL |
 
 ---
 
@@ -320,24 +312,26 @@ enum OptionStatus {
 
 ## 5. Data Sources Strategy
 
-### 5.1 Priority: Official APIs (free tiers)
+### 5.1 Data Sources: Web Scraping Only (Playwright)
 
-| Provider | API | Coverage | Rate Limits |
-|----------|-----|----------|-------------|
-| SNCF | SNCF Connect API | French trains | 1000/day free |
-| Deutsche Bahn | DB API | German trains | Requires signup |
-| Eurostar | Limited API | London-Paris/Brussels | Contact sales |
-| Ryanair | Partner API | Budget flights | Partner program |
-
-### 5.2 Fallback: Web Scraping
+**Constraint:** No external APIs available. All data via Playwright web scraping.
 
 | Provider | Method | Data Extracted |
 |----------|--------|----------------|
-| Booking.com | Puppeteer | Prices, ratings, availability |
-| Kayak | Puppeteer | Flight prices, durations |
-| Skyscanner | API/Scraper | Flight comparisons |
-| Airbnb | Limited API | Limited property data |
-| Google Places | Places API | Attractions, reviews |
+| Booking.com | Playwright | Prices, ratings, availability, images |
+| Kayak | Playwright | Flight prices, durations, airlines |
+| Skyscanner | Playwright | Flight comparisons |
+| SNCF Connect | Playwright | Train schedules, prices |
+| Airbnb | Playwright | Property listings, prices, reviews |
+| Google Maps | Playwright | Attractions, hours, reviews |
+
+### 5.2 Scraping Infrastructure
+
+- **Browser:** Playwright with Chromium
+- **Proxy rotation:** Required for rate limit handling
+- **Headless:** Yes (configurable for debugging)
+- **Anti-detection:** Stealth plugins
+- **Caching:** Redis for scraped data (6h TTL)
 
 ### 5.3 Caching Strategy
 
