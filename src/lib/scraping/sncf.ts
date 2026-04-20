@@ -1,4 +1,5 @@
-import { chromium, Browser } from 'playwright'
+import axios from 'axios'
+import { parse } from 'node-html-parser'
 
 export interface TrainResult {
   id: string
@@ -22,74 +23,78 @@ export async function searchSNCF(params: {
   passengers: number
 }): Promise<TrainResult[]> {
   const { origin, destination, departure } = params
-  
-  let browser: Browser | null = null
-  
+
   try {
-    browser = await chromium.launch({ headless: true })
-    const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    })
-    const page = await context.newPage()
-    
-    // SNCF Connect search URL format
-    const depDate = new Date(departure)
-    const formattedDate = depDate.toISOString().split('T')[0]
-    
+    const formattedDate = departure.replace(/-/g, '')
     const searchUrl = `https://www.sncf-connect.com/app/en-en/search/results?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&departureDate=${formattedDate}`
-    
-    await page.goto(searchUrl, { waitUntil: 'networkidle', timeout: 30000 })
-    
-    // Wait for train results to load
-    await page.waitForTimeout(5000)
-    
-    // Extract train data
-    const trains = await page.evaluate(() => {
-      const results: any[] = []
-      const cards = document.querySelectorAll('[data-testid="journey-card"]')
-      
-      cards.forEach((card, index) => {
-        if (index >= 5) return
-        
-        const priceEl = card.querySelector('[data-testid="price"]')
-        const departureEl = card.querySelector('[data-testid="departure-time"]')
-        const arrivalEl = card.querySelector('[data-testid="arrival-time"]')
-        const durationEl = card.querySelector('[data-testid="duration"]')
-        
-        const priceText = priceEl?.textContent?.trim() || ''
-        const departureTime = departureEl?.textContent?.trim() || ''
-        const arrivalTime = arrivalEl?.textContent?.trim() || ''
-        const duration = durationEl?.textContent?.trim() || ''
-        
-        const priceMatch = priceText.match(/[\d\s]+/)
-        const price = priceMatch ? parseInt(priceMatch[0].replace(/\s/g, '')) : 0
-        
-        if (price > 0) {
-          results.push({ price, departureTime, arrivalTime, duration })
-        }
-      })
-      
-      return results
+
+    const response = await axios.get(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 30000,
     })
-    
-    return trains.map((t: any, i: number) => ({
-      id: `sncf-${i}`,
-      type: 'TRAIN' as const,
-      provider: 'SNCF',
-      origin,
-      destination,
-      departure: new Date(departure),
-      arrival: new Date(departure),
-      price: t.price,
-      currency: 'EUR',
-      bookingUrl: `https://www.sncf-connect.com/`,
-      duration: t.duration,
-    }))
-    
+
+    const root = parse(response.data)
+    const results: TrainResult[] = []
+
+    // Try multiple selectors for journey cards
+    const cards = root.querySelectorAll('[data-testid="journey-card"], .journey-card, .proposal-list-item')
+
+    for (let index = 0; index < cards.length && results.length < 5; index++) {
+      const card = cards[index]
+
+      // Extract price
+      const priceText = card.querySelector('[data-testid="price"], .price, .amount')?.text?.trim() || ''
+      const priceMatch = priceText.match(/[\d\s,]+/)
+      const price = priceMatch ? parseInt(priceMatch[0].replace(/[\s,]/g, '')) : 0
+
+      // Extract times
+      const departureTime = card.querySelector('[data-testid="departure-time"], .departure, .time-departure')?.text?.trim() || ''
+      const arrivalTime = card.querySelector('[data-testid="arrival-time"], .arrival, .time-arrival')?.text?.trim() || ''
+      const duration = card.querySelector('[data-testid="duration"], .duration, .journey-duration')?.text?.trim()
+
+      if (price > 0) {
+        // Parse departure time
+        const now = new Date(departure)
+        const [hours, minutes] = departureTime.split(':').map(Number)
+        const depDate = new Date(now)
+        if (!isNaN(hours) && !isNaN(minutes)) {
+          depDate.setHours(hours, minutes)
+        }
+
+        // Parse arrival time (assume same day or next)
+        const [arrHours, arrMinutes] = arrivalTime.split(':').map(Number)
+        const arrDate = new Date(now)
+        if (!isNaN(arrHours) && !isNaN(arrMinutes)) {
+          arrDate.setHours(arrHours, arrMinutes)
+          if (arrDate < depDate) {
+            arrDate.setDate(arrDate.getDate() + 1)
+          }
+        }
+
+        results.push({
+          id: `sncf-${index}`,
+          type: 'TRAIN' as const,
+          provider: 'SNCF',
+          origin,
+          destination,
+          departure: depDate,
+          arrival: arrDate,
+          price,
+          currency: 'EUR',
+          bookingUrl: `https://www.sncf-connect.com/app/en-en/booking/itinerary?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&departureDate=${departure}`,
+          duration,
+        })
+      }
+    }
+
+    return results
+
   } catch (error) {
     console.error('SNCF scraping error:', error)
-    return []
-  } finally {
-    if (browser) await browser.close()
+    throw error
   }
 }
