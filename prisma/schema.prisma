@@ -40,6 +40,7 @@ model Trip {
   activities       Activity[]
   itineraryDays    ItineraryDay[]
   collaborations   Collaboration[]
+  suggestions      Suggestion[]
   activityLog      ActivityLog[]
   
   createdAt       DateTime @default(now())
