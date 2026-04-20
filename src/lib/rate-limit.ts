@@ -118,60 +118,12 @@ export async function checkSessionRateLimit(sessionId: string): Promise<RateLimi
 
 /**
  * Middleware to check rate limits
+ * DISABLED: Rate limiting disabled, only cache is used
  */
 export async function rateLimitMiddleware(
   request: NextRequest
 ): Promise<{ allowed: boolean; response?: NextResponse }> {
-  const ip = getClientIP(request)
-  const sessionId = getSessionID(request)
-  
-  // Check IP rate limit first (10 req/min)
-  const ipResult = await checkIPRateLimit(ip)
-  
-  if (!ipResult.allowed) {
-    const response = NextResponse.json(
-      {
-        error: 'Rate limit exceeded',
-        retryAfter: ipResult.retryAfter,
-        limit: ipResult.limit,
-      },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(ipResult.retryAfter),
-          'X-RateLimit-Limit': String(ipResult.limit),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': ipResult.resetTime ? String(Math.floor(ipResult.resetTime.getTime() / 1000)) : '',
-        },
-      }
-    )
-    return { allowed: false, response }
-  }
-  
-  // Check session rate limit if session exists (30 req/min)
-  if (sessionId) {
-    const sessionResult = await checkSessionRateLimit(sessionId)
-    
-    if (!sessionResult.allowed) {
-      const response = NextResponse.json(
-        {
-          error: 'Session rate limit exceeded',
-          retryAfter: sessionResult.retryAfter,
-          limit: sessionResult.limit,
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(sessionResult.retryAfter),
-            'X-RateLimit-Limit': String(sessionResult.limit),
-            'X-RateLimit-Remaining': '0',
-          },
-        }
-      )
-      return { allowed: false, response }
-    }
-  }
-  
+  // Rate limiting disabled - allow all requests
   return { allowed: true }
 }
 
