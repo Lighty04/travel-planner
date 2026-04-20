@@ -1,0 +1,221 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User & Authentication
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  createdAt     DateTime  @default(now())
+  trips         Trip[]
+  collaborations Collaboration[]
+  suggestions   Suggestion[]
+}
+
+// Trip (main entity)
+model Trip {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+  
+  // Basic info
+  destination     String
+  startDate       DateTime
+  endDate         DateTime
+  travelers       Int      @default(1)
+  budgetMin       Int?     // Optional budget range
+  budgetMax       Int?
+  status          TripStatus @default(DRAFT)
+  
+  // Relations
+  transportOptions TransportOption[]
+  accommodations   Accommodation[]
+  activities       Activity[]
+  itineraryDays    ItineraryDay[]
+  collaborations   Collaboration[]
+  activityLog      ActivityLog[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum TripStatus {
+  DRAFT
+  PLANNING
+  BOOKED
+  COMPLETED
+}
+
+// Transportation options (flights, trains, buses)
+model TransportOption {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  type        TransportType // FLIGHT, TRAIN, BUS
+  provider    String   // "SNCF", "Ryanair", "FlixBus"
+  origin      String
+  destination String
+  departure   DateTime
+  arrival     DateTime
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("EUR")
+  bookingUrl  String
+  
+  // Selection status
+  selected    Boolean  @default(false)
+  status      OptionStatus @default(PENDING)
+  
+  // Metadata
+  scrapedAt   DateTime @default(now())
+  expiresAt   DateTime // Data freshness
+}
+
+enum TransportType {
+  FLIGHT
+  TRAIN
+  BUS
+  RENTAL_CAR
+}
+
+// Accommodation options
+model Accommodation {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  provider    String   // "booking.com", "airbnb"
+  name        String
+  address     String
+  pricePerNight Decimal @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+  currency    String   @default("EUR")
+  rating      Float    // 0-5
+  reviewCount Int
+  amenities   String[] // ["wifi", "parking", "pool"]
+  bookingUrl  String
+  imageUrl    String?
+  
+  // Selection status
+  selected    Boolean  @default(false)
+  status      OptionStatus @default(PENDING)
+  
+  scrapedAt   DateTime @default(now())
+  expiresAt   DateTime
+}
+
+// User's places to visit
+model Activity {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  address     String?
+  category    String   // "museum", "restaurant", "park"
+  duration    Int      // minutes
+  ticketRequired Boolean @default(false)
+  ticketUrl   String?
+  ticketPrice Decimal? @db.Decimal(10, 2)
+  
+  // Scheduled on itinerary
+  itineraryDayId String?
+  itineraryDay   ItineraryDay? @relation(fields: [itineraryDayId], references: [id])
+}
+
+// Itinerary days
+model ItineraryDay {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  date        DateTime
+  dayNumber   Int
+  activities  Activity[]
+  notes       String?
+}
+
+// Collaboration (trip sharing)
+model Collaboration {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  email       String   // For invites before user accepts
+  role        CollaborationRole @default(VIEWER)
+  status      CollaborationStatus @default(PENDING)
+  
+  createdAt   DateTime @default(now())
+}
+
+enum CollaborationRole {
+  VIEWER
+  EDITOR
+}
+
+enum CollaborationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+// Suggestions from collaborators
+model Suggestion {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  suggestedBy String
+  user        User     @relation(fields: [suggestedBy], references: [id])
+  
+  type        SuggestionType // CHANGE_TRANSPORT, CHANGE_HOTEL, etc.
+  content     String       // JSON with proposed changes
+  status      SuggestionStatus @default(PENDING)
+  
+  createdAt   DateTime @default(now())
+  respondedAt DateTime?
+}
+
+enum SuggestionType {
+  CHANGE_TRANSPORT
+  CHANGE_ACCOMMODATION
+  ADD_ACTIVITY
+  REMOVE_ACTIVITY
+  MODIFY_ITINERARY
+}
+
+enum SuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Activity log
+model ActivityLog {
+  id          String   @id @default(cuid())
+  tripId      String
+  trip        Trip     @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  
+  actorId     String?
+  action      String   // "created_trip", "selected_hotel", "suggested_change"
+  details     String?  // JSON context
+  createdAt   DateTime @default(now())
+}
+
+// Status for options
+enum OptionStatus {
+  PENDING    // Suggested, not decided
+  SELECTED   // User chose this
+  REJECTED   // User declined
+  BOOKED     // Actually booked (manual confirmation)
+}
