@@ -1,13 +1,31 @@
-import { getServerSession } from 'next-auth'
-import { redirect } from 'next/navigation'
-import { authOptions } from '@/lib/auth'
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 
-export default async function LoginPage() {
-  const session = await getServerSession(authOptions)
+export default function LoginPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
 
-  if (session) {
-    redirect('/trips')
+  async function handleDevLogin() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/dev-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      if (res.ok) {
+        router.push('/trips')
+      } else {
+        alert('Dev login failed')
+        setLoading(false)
+      }
+    } catch (error) {
+      alert('Dev login failed')
+      setLoading(false)
+    }
   }
 
   return (
@@ -17,8 +35,29 @@ export default async function LoginPage() {
         <p className="text-muted-foreground text-center">
           Sign in to start planning your trips
         </p>
+        
         <Button asChild className="w-full">
           <a href="/api/auth/signin?callbackUrl=/trips">Sign in with Google</a>
+        </Button>
+        
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background px-2 text-muted-foreground">
+              Or
+            </span>
+          </div>
+        </div>
+        
+        <Button 
+          variant="outline" 
+          className="w-full"
+          onClick={handleDevLogin}
+          disabled={loading}
+        >
+          {loading ? 'Loading...' : 'Dev Login (Skip OAuth)'}
         </Button>
       </div>
     </div>
