@@ -220,3 +220,19 @@ enum OptionStatus {
   REJECTED   // User declined
   BOOKED     // Actually booked (manual confirmation)
 }
+
+// Search history for caching and analytics
+model SearchHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  tripId      String?
+  type        String   // "ACCOMMODATION" or "TRANSPORT"
+  params      String   // JSON stringified search params
+  resultCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  // Index for fast lookups
+  @@index([userId, createdAt])
+  @@index([tripId, createdAt])
+  @@index([type, createdAt])
+}

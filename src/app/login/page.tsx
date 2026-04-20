@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { signIn } from 'next-auth/react'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -11,19 +12,25 @@ export default function LoginPage() {
   async function handleDevLogin() {
     setLoading(true)
     try {
-      const res = await fetch('/api/auth/dev-login', {
+      console.log('[LOGIN] Attempting dev login direct...')
+      const res = await fetch('/api/auth/dev-login-direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
 
-      if (res.ok) {
+      const data = await res.json()
+      console.log('[LOGIN] Dev login result:', data)
+
+      if (res.ok && data.success) {
         router.push('/trips')
       } else {
-        alert('Dev login failed')
+        console.error('[LOGIN] Dev login failed:', data.error)
+        alert('Dev login failed: ' + (data.error || 'Unknown error'))
         setLoading(false)
       }
     } catch (error) {
-      alert('Dev login failed')
+      console.error('[LOGIN] Exception during dev login:', error)
+      alert('Dev login failed: ' + String(error))
       setLoading(false)
     }
   }

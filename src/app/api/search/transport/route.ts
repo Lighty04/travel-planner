@@ -1,18 +1,99 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { searchKayak } from '@/lib/scraping/kayak'
-import { searchSNCF } from '@/lib/scraping/sncf'
+import { searchKayak, FlightResult } from '@/lib/scraping/kayak'
+import { searchSNCF, TrainResult } from '@/lib/scraping/sncf'
+import {
+  generateCacheKey,
+  getCached,
+  setCache,
+} from '@/lib/cache/redis'
+import { rateLimitMiddleware, getRateLimitHeaders } from '@/lib/rate-limit'
+import { saveTransportSearch } from '@/lib/db/search-history'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+// Cache TTL: 1 hour
+const CACHE_TTL = 3600
+
+interface TransportSearchParams {
+  origin: string
+  destination: string
+  departure: string
+  return?: string
+  passengers: number
+}
 
 export async function POST(req: NextRequest) {
+  const startTime = Date.now()
+  
+  // Check rate limits
+  const rateLimit = await rateLimitMiddleware(req)
+  if (!rateLimit.allowed) {
+    return rateLimit.response!
+  }
+  
   try {
     const body = await req.json()
     const { tripId, origin, destination, departure, return: returnDate, passengers } = body
     
-    // Search both Kayak (flights) and SNCF (trains)
-    const [flightResults, trainResults] = await Promise.all([
-      searchKayak({ origin, destination, departure, return: returnDate, passengers }),
-      searchSNCF({ origin, destination, departure, return: returnDate, passengers }),
-    ])
+    // Validate required fields
+    if (!origin || !destination || !departure || !passengers) {
+      return NextResponse.json(
+        { error: 'Missing required fields: origin, destination, departure, passengers' },
+        { status: 400 }
+      )
+    }
+    
+    // Generate cache key
+    const cacheKey = generateCacheKey('transport', {
+      origin: origin.toLowerCase(),
+      destination: destination.toLowerCase(),
+      departure,
+      return: returnDate,
+      passengers,
+    })
+    
+    // Check cache first
+    const cachedResults = await getCached<
+      { flights: FlightResult[]; trains: TrainResult[] }
+    >(cacheKey, async () => ({ flights: [], trains: [] }), CACHE_TTL)
+    
+    let flightResults: FlightResult[]
+    let trainResults: TrainResult[]
+    let fromCache = false
+    
+    if (
+      cachedResults &&
+      (cachedResults.flights.length > 0 || cachedResults.trains.length > 0)
+    ) {
+      // Use cached results
+      console.log(`[CACHE HIT] Transport search for ${origin} to ${destination}`)
+      flightResults = cachedResults.flights
+      trainResults = cachedResults.trains
+      fromCache = true
+    } else {
+      // Cache miss - perform fresh scrape
+      console.log(`[CACHE MISS] Scraping transport for ${origin} to ${destination}`)
+      
+      // Search both Kayak (flights) and SNCF (trains)
+      const [flights, trains] = await Promise.all([
+        searchKayak({ origin, destination, departure, return: returnDate, passengers }),
+        searchSNCF({ origin, destination, departure, return: returnDate, passengers }),
+      ])
+      
+      flightResults = flights
+      trainResults = trains
+      
+      // Store results in cache
+      await setCache(
+        cacheKey,
+        { flights: flightResults, trains: trainResults },
+        CACHE_TTL
+      )
+      console.log(
+        `[CACHE SET] Stored ${flightResults.length} flights and ${trainResults.length} trains`
+      )
+    }
     
     // Save flight results
     const savedFlights = await Promise.all(
@@ -56,12 +137,95 @@ export async function POST(req: NextRequest) {
       )
     )
     
-    return NextResponse.json({
-      flights: savedFlights,
-      trains: savedTrains,
-    })
+    // Save to search history
+    const session = await getServerSession(authOptions)
+    if (session?.user?.id) {
+      await saveTransportSearch(
+        session.user.id,
+        { tripId, origin, destination, departure, returnDate, passengers },
+        flightResults,
+        trainResults
+      )
+    }
+    
+    // Get rate limit headers
+    const rateLimitHeaders = await getRateLimitHeaders(req)
+    
+    const duration = Date.now() - startTime
+    console.log(
+      `[API] Transport search completed in ${duration}ms (cached: ${fromCache})`
+    )
+    
+    return NextResponse.json(
+      {
+        data: {
+          flights: savedFlights,
+          trains: savedTrains,
+        },
+        meta: {
+          fromCache,
+          duration,
+          flightCount: savedFlights.length,
+          trainCount: savedTrains.length,
+        },
+      },
+      {
+        headers: {
+          'X-Cache-Status': fromCache ? 'HIT' : 'MISS',
+          ...rateLimitHeaders,
+        },
+      }
+    )
   } catch (error) {
     console.error('Transport search error:', error)
-    return NextResponse.json({ error: 'Search failed' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Search failed' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(req: NextRequest) {
+  // Check rate limits
+  const rateLimit = await rateLimitMiddleware(req)
+  if (!rateLimit.allowed) {
+    return rateLimit.response!
+  }
+  
+  try {
+    const { searchParams } = new URL(req.url)
+    const tripId = searchParams.get('tripId')
+    
+    if (!tripId) {
+      return NextResponse.json(
+        { error: 'tripId is required' },
+        { status: 400 }
+      )
+    }
+    
+    const [flights, trains] = await Promise.all([
+      prisma.transportOption.findMany({
+        where: { tripId, type: 'FLIGHT' },
+        orderBy: { price: 'asc' },
+      }),
+      prisma.transportOption.findMany({
+        where: { tripId, type: 'TRAIN' },
+        orderBy: { price: 'asc' },
+      }),
+    ])
+    
+    // Get rate limit headers
+    const rateLimitHeaders = await getRateLimitHeaders(req)
+    
+    return NextResponse.json(
+      { data: { flights, trains } },
+      { headers: rateLimitHeaders }
+    )
+  } catch (error) {
+    console.error('Failed to get transport options:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch transport options' },
+      { status: 500 }
+    )
   }
 }

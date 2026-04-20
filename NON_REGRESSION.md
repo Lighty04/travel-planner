@@ -2,6 +2,27 @@
 
 **Last updated:** 2026-04-20
 
+## Phase 0: Static Assets (Critical for UI)
+
+### Static Files Serving
+- [ ] CSS files return 200 (not 404)
+- [ ] JS chunks return 200 (not 404)
+- [ ] Fonts return 200 (not 404)
+
+```bash
+# Test critical static assets
+curl -s -o /dev/null -w "%{http_code}" http://192.168.0.16:3000/_next/static/css/cb739d5c8d46f004.css
+curl -s -o /dev/null -w "%{http_code}" http://192.168.0.16:3000/_next/static/chunks/webpack-96cc0c07babe42a7.js
+curl -s -o /dev/null -w "%{http_code}" http://192.168.0.16:3000/_next/static/media/e4af272ccee01ff0-s.p.woff2
+
+# All should return: 200
+```
+
+**Regression Prevention:**
+When deploying standalone build, ensure `.next/static/` exists at project root (not inside `standalone/` directory). The server looks for files at `../.next/static/` relative to `standalone/server.js`.
+
+---
+
 ## Phase 1: Foundation
 
 ### Auth & Session

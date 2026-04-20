@@ -27,13 +27,19 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
+  console.log('[TRIPS POST] Session:', { user: session?.user, id: session?.user?.id })
+  
   if (!session?.user?.id) {
+    console.error('[TRIPS POST] Unauthorized - no session or user id')
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
     const body = await req.json()
+    console.log('[TRIPS POST] Request body:', body)
+    
     const data = createTripSchema.parse(body)
+    console.log('[TRIPS POST] Validated data:', data)
 
     const trip = await prisma.trip.create({
       data: {
@@ -44,9 +50,11 @@ export async function POST(req: NextRequest) {
         travelers: data.travelers,
       },
     })
+    console.log('[TRIPS POST] Created trip:', trip.id)
 
     return NextResponse.json(trip, { status: 201 })
   } catch (error) {
-    return NextResponse.json({ error: 'Invalid data' }, { status: 400 })
+    console.error('[TRIPS POST] Error:', error)
+    return NextResponse.json({ error: 'Invalid data', details: String(error) }, { status: 400 })
   }
 }
