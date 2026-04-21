@@ -232,7 +232,7 @@ export default function HomePage() {
         </div>
 
         <div className="max-w-6xl mx-auto mt-12">
-          <SearchResults results={results} isLoading={isLoading} error={error} />
+          <SearchResults results={results} isLoading={isLoading} error={error} searchParams={{ checkIn, checkOut, guests, rooms: 1 }} />
         </div>
       </main>
     </div>

@@ -35,9 +35,28 @@ interface SearchResultsProps {
   results: { accommodation?: AccommodationResult[]; transport?: { flights: TransportResult[]; trains: TransportResult[] } } | null
   isLoading: boolean
   error: string | null
+  searchParams?: {
+    checkIn: string
+    checkOut: string
+    guests: number
+    rooms: number
+  }
 }
 
-export function SearchResults({ results, isLoading, error }: SearchResultsProps) {
+function buildBookingUrl(baseUrl: string, params: { checkIn: string; checkOut: string; guests: number; rooms: number }) {
+  try {
+    const url = new URL(baseUrl)
+    url.searchParams.set('checkin', params.checkIn)
+    url.searchParams.set('checkout', params.checkOut)
+    url.searchParams.set('group_adults', String(params.guests))
+    url.searchParams.set('no_rooms', String(params.rooms))
+    return url.toString()
+  } catch {
+    return baseUrl
+  }
+}
+
+export function SearchResults({ results, isLoading, error, searchParams }: SearchResultsProps) {
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16">
@@ -122,7 +141,20 @@ export function SearchResults({ results, isLoading, error }: SearchResultsProps)
                       )}
                       <p className="text-xs text-muted-foreground">per night</p>
                     </div>
-                    {hotel.bookingUrl && (
+                    {hotel.bookingUrl && searchParams && (
+                      <Button asChild size="sm">
+                        <a
+                          href={buildBookingUrl(hotel.bookingUrl, searchParams)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex flex-col leading-tight"
+                        >
+                          <span>Book Now</span>
+                          <span className="text-[10px] opacity-80 font-normal">on Booking.com</span>
+                        </a>
+                      </Button>
+                    )}
+                    {hotel.bookingUrl && !searchParams && (
                       <Button asChild size="sm">
                         <a href={hotel.bookingUrl} target="_blank" rel="noopener noreferrer">
                           Book Now

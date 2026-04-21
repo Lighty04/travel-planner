@@ -167,7 +167,10 @@ export async function searchHotelsRapidAPI({
         rating: h.review_score ? h.review_score / 2 : 4.0,
         reviewCount: h.review_nr || 0,
         amenities: (h.facilities_block?.facilities || []).map((f: any) => f.name).slice(0, 5) || ['WiFi'],
-        bookingUrl: h.url || `https://www.booking.com/hotel/${h.hotel_id}.html`,
+        bookingUrl: (() => {
+          if (h.url && h.url.includes('?')) return h.url
+          return `${h.url || `https://www.booking.com/hotel/${h.hotel_id}.html`}?checkin=${checkIn}&checkout=${checkOut}&group_adults=${guests}&no_rooms=${Math.ceil(guests / 2)}`
+        })(),
         imageUrl: h.max_photo_url || h.main_photo_url,
         chain: h.chain_name || undefined,
       }
