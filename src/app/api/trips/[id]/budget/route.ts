@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
-import { prisma } from '@/lib/db'
+import { authOptions } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 
 // GET /api/trips/[id]/budget - Get budget breakdown
 export async function GET(
