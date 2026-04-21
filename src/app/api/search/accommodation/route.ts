@@ -14,38 +14,6 @@ import { authOptions } from '@/lib/auth'
 // Cache TTL: 1 hour
 const CACHE_TTL = 3600
 
-// Mock data fallback when scraper fails
-function getMockAccommodationData(
-  destination: string,
-  checkIn: string,
-  checkOut: string,
-  guests: number
-): AccommodationResult[] {
-  const hotels = [
-    { name: 'Hôtel Le Marais', pricePerNight: 89, rating: 4.2, reviewCount: 1243 },
-    { name: 'Mercure Centre', pricePerNight: 120, rating: 4.1, reviewCount: 892 },
-    { name: 'Ibis Styles', pricePerNight: 75, rating: 3.9, reviewCount: 2104 },
-    { name: 'Novotel Centre', pricePerNight: 145, rating: 4.3, reviewCount: 567 },
-    { name: 'Premier Inn', pricePerNight: 65, rating: 3.8, reviewCount: 3401 },
-  ]
-
-  const nights = Math.max(1, Math.ceil((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)))
-
-  return hotels.map((hotel, index) => ({
-    id: `mock-${index}`,
-    name: hotel.name,
-    address: `${destination}, France`,
-    pricePerNight: hotel.pricePerNight,
-    totalPrice: hotel.pricePerNight * nights * guests,
-    currency: 'EUR',
-    rating: hotel.rating,
-    reviewCount: hotel.reviewCount,
-    amenities: ['WiFi', 'Breakfast', 'Gym'],
-    bookingUrl: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(destination)}`,
-    imageUrl: undefined,
-  }))
-}
-
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
   
@@ -101,8 +69,11 @@ export async function POST(req: NextRequest) {
           guests,
         })
       } catch (scrapeError) {
-        console.log('[SCRAPER FAILED] Using mock data fallback:', scrapeError)
-        results = getMockAccommodationData(destination, checkIn, checkOut, guests)
+        console.error('[SCRAPER FAILED] Hotel search service unavailable:', scrapeError)
+        return NextResponse.json(
+          { error: 'Hotel search service unavailable' },
+          { status: 503 }
+        )
       }
       
       // Store results in cache

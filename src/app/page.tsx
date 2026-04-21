@@ -153,7 +153,7 @@ export default function HomePage() {
       if (accData?.error) throw new Error(accData.error)
       if (transData?.error) throw new Error(transData.error)
 
-      setResults({ accommodation: accData, transport: transData })
+      setResults({ accommodation: accData?.data || [], transport: transData?.data || { flights: [], trains: [] } })
     } catch (err: any) {
       setError(err.message || 'Something went wrong')
     } finally {

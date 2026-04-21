@@ -15,88 +15,6 @@ import { authOptions } from '@/lib/auth'
 // Cache TTL: 1 hour
 const CACHE_TTL = 3600
 
-// Mock data fallback when all scrapers fail
-function getMockFlightData(origin: string, destination: string): { flights: FlightResult[]; trains: TrainResult[] } {
-  const flights: FlightResult[] = [
-    {
-      id: 'mock-flight-1',
-      type: 'FLIGHT',
-      provider: 'Air France',
-      airline: 'Air France',
-      origin,
-      destination,
-      departure: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      arrival: new Date(Date.now() + 26 * 60 * 60 * 1000),
-      duration: '2h 30m',
-      price: 129,
-      currency: 'EUR',
-      bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
-      stops: 0,
-    },
-    {
-      id: 'mock-flight-2',
-      type: 'FLIGHT',
-      provider: 'EasyJet',
-      airline: 'EasyJet',
-      origin,
-      destination,
-      departure: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      arrival: new Date(Date.now() + 50 * 60 * 60 * 1000),
-      duration: '2h 15m',
-      price: 89,
-      currency: 'EUR',
-      bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
-      stops: 0,
-    },
-    {
-      id: 'mock-flight-3',
-      type: 'FLIGHT',
-      provider: 'Ryanair',
-      airline: 'Ryanair',
-      origin,
-      destination,
-      departure: new Date(Date.now() + 72 * 60 * 60 * 1000),
-      arrival: new Date(Date.now() + 74 * 60 * 60 * 1000),
-      duration: '2h 20m',
-      price: 59,
-      currency: 'EUR',
-      bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
-      stops: 0,
-    },
-  ]
-
-  const trains: TrainResult[] = [
-    {
-      id: 'mock-train-1',
-      type: 'TRAIN',
-      provider: 'SNCF',
-      origin,
-      destination,
-      departure: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      arrival: new Date(Date.now() + 28 * 60 * 60 * 1000),
-      duration: '4h 15m',
-      price: 45,
-      currency: 'EUR',
-      bookingUrl: 'https://www.sncf-connect.com',
-    },
-    {
-      id: 'mock-train-2',
-      type: 'TRAIN',
-      provider: 'SNCF',
-      origin,
-      destination,
-      departure: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      arrival: new Date(Date.now() + 52 * 60 * 60 * 1000),
-      duration: '4h 00m',
-      price: 55,
-      currency: 'EUR',
-      bookingUrl: 'https://www.sncf-connect.com',
-    },
-  ]
-
-  return { flights, trains }
-}
-
 interface TransportSearchParams {
   origin: string
   destination: string
@@ -167,10 +85,11 @@ export async function POST(req: NextRequest) {
         flightResults = flights
         trainResults = trains
       } catch (scrapeError) {
-        console.log('[SCRAPER FAILED] Using mock data fallback:', scrapeError)
-        const mockData = getMockFlightData(origin, destination)
-        flightResults = mockData.flights
-        trainResults = mockData.trains
+        console.error('[SCRAPER FAILED] Flight search service unavailable:', scrapeError)
+        return NextResponse.json(
+          { error: 'Flight search service unavailable' },
+          { status: 503 }
+        )
       }
 
       // Store results in cache
