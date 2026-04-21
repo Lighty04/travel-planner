@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import ItineraryPlanner from './components/ItineraryPlanner'
 import { 
   Loader2, Bed, Plane, Train, Bus, Search, Check, ExternalLink, 
   DollarSign, Calendar, Users, MapPin, ArrowRight, ShoppingCart,
@@ -565,6 +566,13 @@ export default function TripDetailPage() {
             </div>
           </div>
         )}
+        {/* Itinerary Section */}
+        <ItineraryPlanner
+          tripId={trip.id}
+          startDate={trip.startDate}
+          endDate={trip.endDate}
+          nights={trip.nights}
+        />
       </main>
     </div>
   )
