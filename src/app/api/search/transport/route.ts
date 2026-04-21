@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { searchKayak, FlightResult } from '@/lib/scraping/kayak'
+import { searchFlights, FlightResult } from '@/lib/scraping/amadeus-flights'
 import { searchSNCF, TrainResult } from '@/lib/scraping/sncf'
 import {
   generateCacheKey,
@@ -15,14 +15,14 @@ import { authOptions } from '@/lib/auth'
 // Cache TTL: 1 hour
 const CACHE_TTL = 3600
 
-// Mock data fallback when scrapers fail
+// Mock data fallback when all scrapers fail
 function getMockFlightData(origin: string, destination: string): { flights: FlightResult[]; trains: TrainResult[] } {
   const flights: FlightResult[] = [
     {
       id: 'mock-flight-1',
       type: 'FLIGHT',
-      airline: 'Air France',
       provider: 'Air France',
+      airline: 'Air France',
       origin,
       destination,
       departure: new Date(Date.now() + 24 * 60 * 60 * 1000),
@@ -31,12 +31,13 @@ function getMockFlightData(origin: string, destination: string): { flights: Flig
       price: 129,
       currency: 'EUR',
       bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
+      stops: 0,
     },
     {
       id: 'mock-flight-2',
       type: 'FLIGHT',
-      airline: 'EasyJet',
       provider: 'EasyJet',
+      airline: 'EasyJet',
       origin,
       destination,
       departure: new Date(Date.now() + 48 * 60 * 60 * 1000),
@@ -45,12 +46,13 @@ function getMockFlightData(origin: string, destination: string): { flights: Flig
       price: 89,
       currency: 'EUR',
       bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
+      stops: 0,
     },
     {
       id: 'mock-flight-3',
       type: 'FLIGHT',
-      airline: 'Ryanair',
       provider: 'Ryanair',
+      airline: 'Ryanair',
       origin,
       destination,
       departure: new Date(Date.now() + 72 * 60 * 60 * 1000),
@@ -59,6 +61,7 @@ function getMockFlightData(origin: string, destination: string): { flights: Flig
       price: 59,
       currency: 'EUR',
       bookingUrl: `https://www.kayak.com/flights/${origin}-${destination}`,
+      stops: 0,
     },
   ]
 
@@ -155,9 +158,9 @@ export async function POST(req: NextRequest) {
       console.log(`[CACHE MISS] Scraping transport for ${origin} to ${destination}`)
 
       try {
-        // Search both Kayak (flights) and SNCF (trains)
+        // Search flights (Amadeus/RapidAPI) and SNCF trains
         const [flights, trains] = await Promise.all([
-          searchKayak({ origin, destination, departure, return: returnDate, passengers }),
+          searchFlights({ origin, destination, departure, return: returnDate, passengers }),
           searchSNCF({ origin, destination, departure, return: returnDate, passengers }),
         ])
 

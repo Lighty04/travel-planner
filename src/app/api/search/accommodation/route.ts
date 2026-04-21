@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { searchBooking, AccommodationResult } from '@/lib/scraping/booking'
+import { searchHotels, AccommodationResult } from '@/lib/scraping/amadeus-hotels'
 import {
   generateCacheKey,
   getCached,
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       // Cache miss - perform fresh scrape
       console.log(`[CACHE MISS] Scraping Booking.com for ${destination}`)
       try {
-        results = await searchBooking({
+        results = await searchHotels({
           destination,
           checkIn,
           checkOut,
