@@ -104,17 +104,17 @@ interface TransportSearchParams {
 
 export async function POST(req: NextRequest) {
   const startTime = Date.now()
-  
+
   // Check rate limits
   const rateLimit = await rateLimitMiddleware(req)
   if (!rateLimit.allowed) {
     return rateLimit.response!
   }
-  
+
   try {
     const body = await req.json()
     const { tripId, origin, destination, departure, return: returnDate, passengers } = body
-    
+
     // Validate required fields
     if (!origin || !destination || !departure || !passengers) {
       return NextResponse.json(
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     // Generate cache key
     const cacheKey = generateCacheKey('transport', {
       origin: origin.toLowerCase(),
@@ -131,16 +131,16 @@ export async function POST(req: NextRequest) {
       return: returnDate,
       passengers,
     })
-    
+
     // Check cache first
     const cachedResults = await getCached<
       { flights: FlightResult[]; trains: TrainResult[] }
     >(cacheKey, async () => ({ flights: [], trains: [] }), CACHE_TTL)
-    
+
     let flightResults: FlightResult[]
     let trainResults: TrainResult[]
     let fromCache = false
-    
+
     if (
       cachedResults &&
       (cachedResults.flights.length > 0 || cachedResults.trains.length > 0)
@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
     } else {
       // Cache miss - perform fresh scrape
       console.log(`[CACHE MISS] Scraping transport for ${origin} to ${destination}`)
-      
+
       try {
         // Search both Kayak (flights) and SNCF (trains)
         const [flights, trains] = await Promise.all([
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
         flightResults = mockData.flights
         trainResults = mockData.trains
       }
-      
+
       // Store results in cache
       await setCache(
         cacheKey,
@@ -180,49 +180,53 @@ export async function POST(req: NextRequest) {
         `[CACHE SET] Stored ${flightResults.length} flights and ${trainResults.length} trains`
       )
     }
-    
-    // Save flight results
-    const savedFlights = await Promise.all(
-      flightResults.map(async (flight) =>
-        prisma.transportOption.create({
-          data: {
-            tripId,
-            type: 'FLIGHT',
-            provider: flight.airline || 'Unknown',
-            origin: flight.origin,
-            destination: flight.destination,
-            departure: flight.departure,
-            arrival: flight.arrival,
-            price: flight.price,
-            currency: flight.currency,
-            bookingUrl: flight.bookingUrl,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
-          },
-        })
-      )
-    )
-    
-    // Save train results
-    const savedTrains = await Promise.all(
-      trainResults.map(async (train) =>
-        prisma.transportOption.create({
-          data: {
-            tripId,
-            type: 'TRAIN',
-            provider: 'SNCF',
-            origin: train.origin,
-            destination: train.destination,
-            departure: train.departure,
-            arrival: train.arrival,
-            price: train.price,
-            currency: train.currency,
-            bookingUrl: train.bookingUrl,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          },
-        })
-      )
-    )
-    
+
+    // Save flight results (only if tripId is provided)
+    const savedFlights = tripId
+      ? await Promise.all(
+          flightResults.map(async (flight) =>
+            prisma.transportOption.create({
+              data: {
+                tripId,
+                type: 'FLIGHT',
+                provider: flight.airline || 'Unknown',
+                origin: flight.origin,
+                destination: flight.destination,
+                departure: flight.departure,
+                arrival: flight.arrival,
+                price: flight.price,
+                currency: flight.currency,
+                bookingUrl: flight.bookingUrl,
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+              },
+            })
+          )
+        )
+      : flightResults.map((f) => ({ ...f, id: `live-${f.id}`, type: 'FLIGHT' }))
+
+    // Save train results (only if tripId is provided)
+    const savedTrains = tripId
+      ? await Promise.all(
+          trainResults.map(async (train) =>
+            prisma.transportOption.create({
+              data: {
+                tripId,
+                type: 'TRAIN',
+                provider: 'SNCF',
+                origin: train.origin,
+                destination: train.destination,
+                departure: train.departure,
+                arrival: train.arrival,
+                price: train.price,
+                currency: train.currency,
+                bookingUrl: train.bookingUrl,
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+              },
+            })
+          )
+        )
+      : trainResults.map((t) => ({ ...t, id: `live-${t.id}`, type: 'TRAIN' }))
+
     // Save to search history
     const session = await getServerSession(authOptions)
     if (session?.user?.id) {
@@ -233,15 +237,15 @@ export async function POST(req: NextRequest) {
         trainResults
       )
     }
-    
+
     // Get rate limit headers
     const rateLimitHeaders = await getRateLimitHeaders(req)
-    
+
     const duration = Date.now() - startTime
     console.log(
       `[API] Transport search completed in ${duration}ms (cached: ${fromCache})`
     )
-    
+
     return NextResponse.json(
       {
         data: {
@@ -277,18 +281,18 @@ export async function GET(req: NextRequest) {
   if (!rateLimit.allowed) {
     return rateLimit.response!
   }
-  
+
   try {
     const { searchParams } = new URL(req.url)
     const tripId = searchParams.get('tripId')
-    
+
     if (!tripId) {
       return NextResponse.json(
         { error: 'tripId is required' },
         { status: 400 }
       )
     }
-    
+
     const [flights, trains] = await Promise.all([
       prisma.transportOption.findMany({
         where: { tripId, type: 'FLIGHT' },
@@ -299,10 +303,10 @@ export async function GET(req: NextRequest) {
         orderBy: { price: 'asc' },
       }),
     ])
-    
+
     // Get rate limit headers
     const rateLimitHeaders = await getRateLimitHeaders(req)
-    
+
     return NextResponse.json(
       { data: { flights, trains } },
       { headers: rateLimitHeaders }

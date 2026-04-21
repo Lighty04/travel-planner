@@ -112,27 +112,29 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Save results to database
-    const saved = await Promise.all(
-      results.map(async (hotel) =>
-        prisma.accommodation.create({
-          data: {
-            tripId,
-            provider: 'booking.com',
-            name: hotel.name,
-            address: hotel.address,
-            pricePerNight: hotel.pricePerNight,
-            totalPrice: hotel.totalPrice,
-            currency: hotel.currency,
-            rating: hotel.rating,
-            reviewCount: hotel.reviewCount,
-            amenities: hotel.amenities,
-            bookingUrl: hotel.bookingUrl,
-            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
-          },
-        })
-      )
-    )
+    // Save results to database (only if tripId is provided)
+    const saved = tripId
+      ? await Promise.all(
+          results.map(async (hotel) =>
+            prisma.accommodation.create({
+              data: {
+                tripId,
+                provider: 'booking.com',
+                name: hotel.name,
+                address: hotel.address,
+                pricePerNight: hotel.pricePerNight,
+                totalPrice: hotel.totalPrice,
+                currency: hotel.currency,
+                rating: hotel.rating,
+                reviewCount: hotel.reviewCount,
+                amenities: hotel.amenities,
+                bookingUrl: hotel.bookingUrl,
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+              },
+            })
+          )
+        )
+      : results
     
     // Save to search history
     const session = await getServerSession(authOptions)
